@@ -1,0 +1,24 @@
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment files and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Build output and dependencies
+build/
+dist/
+.pio/
+node_modules/
+__pycache__/
+*.py[cod]
+
+# Temporary files
+*.log
+*.tmp
