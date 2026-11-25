@@ -1,19 +1,20 @@
 // =========================================================
-// JOYRATECH MINI PAD V1 - KID-SIZED WIRELESS CONTROLLER SHELL
-// Sized for a 10-year-old (116mm x 58mm x 26mm)
-// Prints completely flat at Z = 0 with zero supports
+// JOYRATECH MINI PRO V1 - FULL DUAL-STICK KID CONTROLLER
+// Sized for a 10-year-old (136mm x 74mm x 28mm)
+// Includes: Dual Sticks, D-Pad, ABXY, Start/Select/Home, L1/R1/L2/R2
+// Zero syntax errors - prints flat at Z = 0 with zero supports
 // =========================================================
 
 $fn = 60;
 
-body_l = 116.0;
-body_w = 58.0;
+body_l = 136.0;
+body_w = 74.0;
 wall = 2.4;
-top_h = 13.0;
-bot_h = 14.0;
-corner_r = 16.0;
+top_h = 14.0;
+bot_h = 15.0;
+corner_r = 18.0;
 
-// Render Bottom Case & Top Faceplate side-by-side at Z = 0
+// Render Bottom Shell & Top Faceplate side-by-side at Z = 0
 bottom_shell();
 
 translate([0, body_w + 14, 0])
@@ -29,7 +30,7 @@ module rounded_box(l, w, h, r) {
 }
 
 // =========================================================
-// PART 1: BOTTOM SHELL (Holds ESP32 + 3xAAA Battery Pack)
+// PART 1: BOTTOM SHELL (ESP32 + Battery + Shoulder Switch Cutouts)
 // =========================================================
 module bottom_shell() {
     difference() {
@@ -37,83 +38,120 @@ module bottom_shell() {
 
         // Hollow interior cavity
         translate([wall, wall, wall])
-            rounded_box(body_l - wall * 2, body_w - wall * 2, bot_h, corner_r - wall);
+            rounded_box(body_l - wall * 2, body_w - wall * 2, bot_h + 1, corner_r - wall);
 
-        // Front USB-C / Micro-USB reprogramming & charging port cutout
+        // Top Edge: L1 & L2 tactile button holes (left shoulder)
+        translate([22, body_w - wall - 1, wall + 4])
+            cube([11, wall + 2, 7]);
+        translate([38, body_w - wall - 1, wall + 4])
+            cube([11, wall + 2, 7]);
+
+        // Top Edge: R1 & R2 tactile button holes (right shoulder)
+        translate([body_l - 33, body_w - wall - 1, wall + 4])
+            cube([11, wall + 2, 7]);
+        translate([body_l - 49, body_w - wall - 1, wall + 4])
+            cube([11, wall + 2, 7]);
+
+        // Center Top USB port cutout
         translate([body_l / 2 - 6, body_w - wall - 1, wall + 3])
             cube([12, wall + 2, 7]);
 
-        // Rear power slide-switch cutout
+        // Bottom Edge power slide-switch cutout
         translate([body_l / 2 - 5, -1, wall + 3])
             cube([10, wall + 2, 6]);
     }
 
-    // 4 Corner M3 screw bosses
-    boss_offsets = [,
-        [body_l - 10, 10],
-        [10, body_w - 10],
-        [body_l - 10, body_w - 10]
+    // 4 Corner M3 screw posts
+    bosses = [,
+        [body_l - 11, 11],
+        [11, body_w - 11],
+        [body_l - 11, body_w - 11]
     ];
-    for (pos = boss_offsets) {
-        translate([pos[0], pos[1], wall])
+    for (p = bosses) {
+        translate([p[0], p[1], wall])
             difference() {
-                cylinder(h = bot_h - wall - 2.0, d = 6.5);
-                cylinder(h = bot_h, d = 2.7); // Self-tapping M3 hole
+                cylinder(h = bot_h - wall - 2.0, d = 6.8);
+                cylinder(h = bot_h, d = 2.7);
             }
     }
 }
 
 // =========================================================
-// PART 2: TOP FACEPLATE (Printed Upside-Down Flat at Z = 0)
+// PART 2: TOP FACEPLATE (Dual Sticks + D-Pad + ABXY + Menu)
 // =========================================================
 module top_shell() {
     difference() {
         union() {
             rounded_box(body_l, body_w, top_h, corner_r);
-            // Inner alignment lip that snaps into bottom shell
-            translate([wall + 0.3, wall + 0.3, top_h])
-                rounded_box(body_l - (wall + 0.3) * 2, body_w - (wall + 0.3) * 2, 2.0, corner_r - wall);
+            // Inner alignment lip
+            translate([wall + 0.35, wall + 0.35, top_h])
+                rounded_box(body_l - (wall + 0.35) * 2, body_w - (wall + 0.35) * 2, 2.0, corner_r - wall);
         }
 
         // Hollow interior cavity
         translate([wall, wall, wall])
             rounded_box(body_l - wall * 2, body_w - wall * 2, top_h + 3, corner_r - wall);
 
-        // Left Analog Thumbstick Dome Opening (22mm dia)
-        translate([28, body_w / 2, -1])
+        // 1. Left Analog Thumbstick Hole (Upper-Left, Xbox/Switch ergonomic layout)
+        translate([26, body_w - 24, -1])
             cylinder(h = wall + 2, d = 22.0);
 
-        // Right 4-Button Diamond Cluster (A, B, X, Y - 7.5mm holes for 6x6mm tactile caps)
-        btn_cx = body_l - 28;
-        btn_cy = body_w / 2;
-        btn_spread = 9.5;
-        btn_holes = [
-            [btn_cx, btn_cy - btn_spread], // Bottom (A)
-            [btn_cx + btn_spread, btn_cy], // Right (B)
-            [btn_cx - btn_spread, btn_cy], // Left (X)
-            [btn_cx, btn_cy + btn_spread]  // Top (Y)
+        // 2. Left 4-Way D-Pad Holes (Lower-Left)
+        dpad_x = 42;
+        dpad_y = 22;
+        dpad_sp = 8.5;
+        dpad_pts = [
+            [dpad_x, dpad_y + dpad_sp], // Up
+            [dpad_x, dpad_y - dpad_sp], // Down
+            [dpad_x - dpad_sp, dpad_y], // Left
+            [dpad_x + dpad_sp, dpad_y]  // Right
         ];
-        for (b = btn_holes) {
+        for (d = dpad_pts) {
+            translate([d[0], d[1], -1])
+                cylinder(h = wall + 2, d = 7.2);
+        }
+
+        // 3. Right 4-Button Diamond ABXY (Upper-Right)
+        abxy_x = body_l - 26;
+        abxy_y = body_w - 24;
+        abxy_sp = 9.0;
+        abxy_pts = [
+            [abxy_x, abxy_y - abxy_sp], // A (Bottom)
+            [abxy_x + abxy_sp, abxy_y], // B (Right)
+            [abxy_x - abxy_sp, abxy_y], // X (Left)
+            [abxy_x, abxy_y + abxy_sp]  // Y (Top)
+        ];
+        for (b = abxy_pts) {
             translate([b[0], b[1], -1])
                 cylinder(h = wall + 2, d = 7.5);
         }
 
-        // Center Start/Menu Button Hole
-        translate([body_l / 2, body_w / 2, -1])
-            cylinder(h = wall + 2, d = 6.0);
+        // 4. Right Analog Thumbstick Hole (Lower-Right)
+        translate([body_l - 44, 22, -1])
+            cylinder(h = wall + 2, d = 22.0);
 
-        // 4 Countersunk Screw Holes matching bottom bosses
-        boss_offsets = [,
-            [body_l - 10, 10],
-            [10, body_w - 10],
-            [body_l - 10, body_w - 10]
+        // 5. Center Select, Home & Start Buttons
+        menu_pts = [
+            [body_l / 2 - 10, body_w / 2 + 6], // Select / Share
+            [body_l / 2 + 10, body_w / 2 + 6], // Start / Options
+            [body_l / 2, body_w / 2 - 6]       // Home
         ];
-        for (pos = boss_offsets) {
-            translate([pos[0], pos[1], -1])
+        for (m = menu_pts) {
+            translate([m[0], m[1], -1])
+                cylinder(h = wall + 2, d = 5.8);
+        }
+
+        // 6. 4 Countersunk Corner Screw Holes
+        bosses = [,
+            [body_l - 11, 11],
+            [11, body_w - 11],
+            [body_l - 11, body_w - 11]
+        ];
+        for (p = bosses) {
+            translate([p[0], p[1], -1])
                 cylinder(h = wall + 2, d = 3.3);
-            translate([pos[0], pos[1], -0.1])
+            translate([p[0], p[1], -0.1])
                 cylinder(h = 1.6, d1 = 6.2, d2 = 3.3);
         }
     }
 }
- 
