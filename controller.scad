@@ -1,23 +1,33 @@
+$fn = 48;
+
 // =========================================================
-// JOYRATECH MINI PRO V1 - FULL DUAL-STICK KID CONTROLLER
-// Sized for a 10-year-old (136mm x 74mm x 29mm)
-// Includes: Dual Sticks, D-Pad, ABXY, Start/Select/Home, L1/R1/L2/R2
+// JOYRATECH PRO (HANDLED EDITION) - ZERO-OVERLAP PRINT BED
+// Flat at Z = 0 | Clean 12mm Spacing Between All Parts
 // =========================================================
 
-$fn = 60;
-
-body_l = 136.0;
-body_w = 74.0;
+body_l = 136;
+body_w = 74;
+total_h = 29;
 wall = 2.4;
-top_h = 14.0;
-bot_h = 15.0;
-corner_r = 18.0;
+split_z = 19;
+corner_r = 12;
 
-// Render Bottom Shell & Top Faceplate side-by-side at Z = 0
-bottom_shell();
+// Tactile switch actuator stem hole size (typical 6x6mm switch: 3.25mm)
+stem_hole_d = 3.25;
 
-translate([0, body_w + 14, 0])
+// 1. Handled Bottom Shell (Shifted Y = +26 so handle tips start at Y = 0)
+translate([8, 26, 0])
+    bottom_shell_handled();
+
+// 2. Handled Top Faceplate (Shifted Y = +138 -> 12mm clear gap above bottom shell)
+translate([8, 138, 0])
     top_shell();
+
+// 3. All 15 Button Caps + 1 Spare (Placed cleanly to the right at X = 160)
+translate([160, 10, 0])
+    layout_caps_grid();
+
+// ---------------- MODULES ----------------
 
 module rounded_box(l, w, h, r) {
     hull() {
@@ -28,129 +38,143 @@ module rounded_box(l, w, h, r) {
     }
 }
 
-// =========================================================
-// PART 1: BOTTOM SHELL
-// =========================================================
-module bottom_shell() {
+// Swept ergonomic left & right palm handles (extends down to Y = -26)
+module ergohandles(h, offset_wall = 0) {
+    // Left Handle
+    hull() {
+        translate([18, 22, 0]) cylinder(h = h, r = 16 - offset_wall);
+        translate([11, 2, 0])  cylinder(h = h, r = 13.5 - offset_wall);
+        translate([4, -15, 0]) cylinder(h = h, r = 11 - offset_wall);
+    }
+    // Right Handle
+    hull() {
+        translate([body_l - 18, 22, 0]) cylinder(h = h, r = 16 - offset_wall);
+        translate([body_l - 11, 2, 0])  cylinder(h = h, r = 13.5 - offset_wall);
+        translate([body_l - 4, -15, 0]) cylinder(h = h, r = 11 - offset_wall);
+    }
+}
+
+module bottom_shell_handled() {
     difference() {
-        rounded_box(body_l, body_w, bot_h, corner_r);
+        union() {
+            rounded_box(body_l, body_w, split_z, corner_r);
+            ergohandles(split_z, offset_wall = 0);
+        }
 
-        // Hollow interior cavity
+        // Hollow main center cavity
         translate([wall, wall, wall])
-            rounded_box(body_l - wall * 2, body_w - wall * 2, bot_h + 1, corner_r - wall);
+            rounded_box(body_l - 2*wall, body_w - 2*wall, split_z + 1, corner_r - wall);
 
-        // Top Edge: L1 & L2 tactile button holes (left shoulder)
-        translate([22, body_w - wall - 1, wall + 4])
-            cube([11, wall + 2, 7]);
-        translate([38, body_w - wall - 1, wall + 4])
-            cube([11, wall + 2, 7]);
+        // Hollow handle pockets
+        translate([0, 0, wall])
+            ergohandles(split_z + 1, offset_wall = wall);
 
-        // Top Edge: R1 & R2 tactile button holes (right shoulder)
-        translate([body_l - 33, body_w - wall - 1, wall + 4])
-            cube([11, wall + 2, 7]);
-        translate([body_l - 49, body_w - wall - 1, wall + 4])
-            cube([11, wall + 2, 7]);
+        // Top Wall (Y = body_w): USB-C port & L1/L2/R1/R2 shoulder cutouts
+        translate([body_l/2 - 4.7, body_w - wall - 1, 7.5])
+            cube([9.4, wall + 2, 3.8]);
+        for (sx = [22, 38, body_l - 33, body_l - 49]) {
+            translate([sx - 3.75, body_w - wall - 1, 11])
+                cube([7.5, wall + 2, 9]);
+        }
 
-        // Center Top USB port cutout
-        translate([body_l / 2 - 6, body_w - wall - 1, wall + 3])
-            cube([12, wall + 2, 7]);
-
-        // Bottom Edge power slide-switch cutout
-        translate([body_l / 2 - 5, -1, wall + 3])
-            cube([10, wall + 2, 6]);
+        // Bottom Center Wall (Y = 0): Power slide switch cutout
+        translate([body_l/2 - 4.25, -1, 7.5])
+            cube([8.5, wall + 2, 4.4]);
     }
 
-    // 4 Corner M3 screw posts
-    bosses = [,
-        [body_l - 11, 11],
-        [11, body_w - 11],
-        [body_l - 11, body_w - 11]
-    ];
-    for (p = bosses) {
+    // 4 Corner Screw Bosses (for M3 x 10mm/12mm screws)
+    bosses = [[6, 6], [body_l - 6, 6], [6, body_w - 6], [body_l - 6, body_w - 6]];
+    for (b = bosses) {
+        translate([b[0], b[1], wall])
+            difference() {
+                cylinder(h = split_z - wall - 0.4, d = 6.2);
+                cylinder(h = split_z, d = 2.7);
+            }
+    }
+
+    // 4 NodeMCU-32S Mounting Standoffs (25.5mm x 51.5mm centered)
+    mcu_pins = [[56.5, 13.5], [79.5, 13.5], [56.5, 62.5], [79.5, 62.5]];
+    for (p = mcu_pins) {
         translate([p[0], p[1], wall])
             difference() {
-                cylinder(h = bot_h - wall - 2.0, d = 6.8);
-                cylinder(h = bot_h, d = 2.7);
+                cylinder(h = 7.5, d = 4.8);
+                cylinder(h = 8, d = 2.0);
             }
     }
 }
 
-// =========================================================
-// PART 2: TOP FACEPLATE
-// =========================================================
 module top_shell() {
+    top_h = total_h - split_z;
     difference() {
         union() {
             rounded_box(body_l, body_w, top_h, corner_r);
-            // Inner alignment lip
-            translate([wall + 0.35, wall + 0.35, top_h])
-                rounded_box(body_l - (wall + 0.35) * 2, body_w - (wall + 0.35) * 2, 2.0, corner_r - wall);
+            ergohandles(top_h, offset_wall = 0);
         }
 
-        // Hollow interior cavity
+        // Hollow underside
         translate([wall, wall, wall])
-            rounded_box(body_l - wall * 2, body_w - wall * 2, top_h + 3, corner_r - wall);
+            rounded_box(body_l - 2*wall, body_w - 2*wall, top_h + 1, corner_r - wall);
+        translate([0, 0, wall])
+            ergohandles(top_h + 1, offset_wall = wall);
 
-        // 1. Left Analog Thumbstick Hole (Upper-Left)
-        translate([26, body_w - 24, -1])
-            cylinder(h = wall + 2, d = 22.0);
+        // Left & Right Thumbstick Holes (24mm diameter)
+        translate([30, 22, -1]) cylinder(h = wall + 2, d = 24);
+        translate([body_l - 30, 22, -1]) cylinder(h = wall + 2, d = 24);
 
-        // 2. Left 4-Way D-Pad Holes (Lower-Left)
-        dpad_x = 42;
-        dpad_y = 22;
-        dpad_sp = 8.5;
-        dpad_pts = [
-            [dpad_x, dpad_y + dpad_sp],
-            [dpad_x, dpad_y - dpad_sp],
-            [dpad_x - dpad_sp, dpad_y],
-            [dpad_x + dpad_sp, dpad_y]
-        ];
-        for (d = dpad_pts) {
-            translate([d[0], d[1], -1])
-                cylinder(h = wall + 2, d = 7.2);
-        }
+        // D-Pad Button Holes (X=28, Y=50, 10mm offset)
+        for (dx = [-10, 10]) translate([28 + dx, 50, -1]) cylinder(h = wall + 2, d = 7.2);
+        for (dy = [-10, 10]) translate([28, 50 + dy, -1]) cylinder(h = wall + 2, d = 7.2);
 
-        // 3. Right 4-Button Diamond ABXY (Upper-Right)
-        abxy_x = body_l - 26;
-        abxy_y = body_w - 24;
-        abxy_sp = 9.0;
-        abxy_pts = [
-            [abxy_x, abxy_y - abxy_sp],
-            [abxy_x + abxy_sp, abxy_y],
-            [abxy_x - abxy_sp, abxy_y],
-            [abxy_x, abxy_y + abxy_sp]
-        ];
-        for (b = abxy_pts) {
-            translate([b[0], b[1], -1])
-                cylinder(h = wall + 2, d = 7.5);
-        }
+        // ABXY Button Holes (X=108, Y=50, 10.5mm offset)
+        for (dx = [-10.5, 10.5]) translate([body_l - 28 + dx, 50, -1]) cylinder(h = wall + 2, d = 7.5);
+        for (dy = [-10.5, 10.5]) translate([body_l - 28, 50 + dy, -1]) cylinder(h = wall + 2, d = 7.5);
 
-        // 4. Right Analog Thumbstick Hole (Lower-Right)
-        translate([body_l - 44, 22, -1])
-            cylinder(h = wall + 2, d = 22.0);
+        // Menu Buttons: Select, Home, Start
+        for (mx = [body_l/2 - 14, body_l/2, body_l/2 + 14])
+            translate([mx, 58, -1]) cylinder(h = wall + 2, d = 6.2);
 
-        // 5. Center Select, Home & Start Buttons
-        menu_pts = [
-            [body_l / 2 - 10, body_w / 2 + 6],
-            [body_l / 2 + 10, body_w / 2 + 6],
-            [body_l / 2, body_w / 2 - 6]
-        ];
-        for (m = menu_pts) {
-            translate([m[0], m[1], -1])
-                cylinder(h = wall + 2, d = 5.8);
-        }
-
-        // 6. 4 Countersunk Corner Screw Holes
-        bosses = [,
-            [body_l - 11, 11],
-            [11, body_w - 11],
-            [body_l - 11, body_w - 11]
-        ];
-        for (p = bosses) {
-            translate([p[0], p[1], -1])
-                cylinder(h = wall + 2, d = 3.3);
-            translate([p[0], p[1], -0.1])
-                cylinder(h = 1.6, d1 = 6.2, d2 = 3.3);
+        // 4 Countersunk Corner Screw Holes
+        bosses = [[6, 6], [body_l - 6, 6], [6, body_w - 6], [body_l - 6, body_w - 6]];
+        for (b = bosses) {
+            translate([b[0], b[1], -1]) cylinder(h = top_h + 2, d = 3.3);
+            translate([b[0], b[1], -0.1]) cylinder(h = 1.6, d1 = 6.0, d2 = 3.3);
         }
     }
+}
+
+module tactile_cap(cap_d, flange_d, total_h, is_shoulder = false) {
+    flange_h = 1.2;
+    difference() {
+        union() {
+            cylinder(h = flange_h, d = flange_d);
+            if (is_shoulder) {
+                translate([-cap_d/2, -2.8, 0])
+                    cube([cap_d, 5.6, total_h]);
+            } else {
+                cylinder(h = total_h - 0.6, d = cap_d);
+                translate([0, 0, total_h - 0.6])
+                    cylinder(h = 0.6, d1 = cap_d, d2 = cap_d - 1.0);
+            }
+        }
+        translate([0, 0, -0.1])
+            cylinder(h = 2.6, d = stem_hole_d);
+        translate([0, 0, -0.1])
+            cylinder(h = 0.5, d1 = stem_hole_d + 0.5, d2 = stem_hole_d);
+    }
+}
+
+// Arranged in a compact 4x4 grid on the right side (fits inside 215x215mm total bed)
+module layout_caps_grid() {
+    for (i = [0:3])
+        translate([0, i * 14, 0])
+            tactile_cap(cap_d = 6.6, flange_d = 8.8, total_h = 4.6);
+    for (i = [0:3])
+        translate([14, i * 14, 0])
+            tactile_cap(cap_d = 6.9, flange_d = 9.1, total_h = 4.6);
+    for (i = [0:3])
+        translate([28, i * 14, 0])
+            tactile_cap(cap_d = 5.6, flange_d = 7.8, total_h = 4.2);
+    for (i = [0:3])
+        translate([42, i * 14, 0])
+            tactile_cap(cap_d = 6.8, flange_d = 9.0, total_h = 5.2, is_shoulder = true);
 }
