@@ -1,8 +1,7 @@
 // =========================================================
 // JOYRATECH MINI PRO V1 - FULL DUAL-STICK KID CONTROLLER
-// Sized for a 10-year-old (136mm x 74mm x 28mm)
+// Sized for a 10-year-old (136mm x 74mm x 29mm)
 // Includes: Dual Sticks, D-Pad, ABXY, Start/Select/Home, L1/R1/L2/R2
-// Zero syntax errors - prints flat at Z = 0 with zero supports
 // =========================================================
 
 $fn = 60;
@@ -30,7 +29,7 @@ module rounded_box(l, w, h, r) {
 }
 
 // =========================================================
-// PART 1: BOTTOM SHELL (ESP32 + Battery + Shoulder Switch Cutouts)
+// PART 1: BOTTOM SHELL
 // =========================================================
 module bottom_shell() {
     difference() {
@@ -77,7 +76,7 @@ module bottom_shell() {
 }
 
 // =========================================================
-// PART 2: TOP FACEPLATE (Dual Sticks + D-Pad + ABXY + Menu)
+// PART 2: TOP FACEPLATE
 // =========================================================
 module top_shell() {
     difference() {
@@ -92,7 +91,7 @@ module top_shell() {
         translate([wall, wall, wall])
             rounded_box(body_l - wall * 2, body_w - wall * 2, top_h + 3, corner_r - wall);
 
-        // 1. Left Analog Thumbstick Hole (Upper-Left, Xbox/Switch ergonomic layout)
+        // 1. Left Analog Thumbstick Hole (Upper-Left)
         translate([26, body_w - 24, -1])
             cylinder(h = wall + 2, d = 22.0);
 
@@ -101,10 +100,10 @@ module top_shell() {
         dpad_y = 22;
         dpad_sp = 8.5;
         dpad_pts = [
-            [dpad_x, dpad_y + dpad_sp], // Up
-            [dpad_x, dpad_y - dpad_sp], // Down
-            [dpad_x - dpad_sp, dpad_y], // Left
-            [dpad_x + dpad_sp, dpad_y]  // Right
+            [dpad_x, dpad_y + dpad_sp],
+            [dpad_x, dpad_y - dpad_sp],
+            [dpad_x - dpad_sp, dpad_y],
+            [dpad_x + dpad_sp, dpad_y]
         ];
         for (d = dpad_pts) {
             translate([d[0], d[1], -1])
@@ -116,10 +115,10 @@ module top_shell() {
         abxy_y = body_w - 24;
         abxy_sp = 9.0;
         abxy_pts = [
-            [abxy_x, abxy_y - abxy_sp], // A (Bottom)
-            [abxy_x + abxy_sp, abxy_y], // B (Right)
-            [abxy_x - abxy_sp, abxy_y], // X (Left)
-            [abxy_x, abxy_y + abxy_sp]  // Y (Top)
+            [abxy_x, abxy_y - abxy_sp],
+            [abxy_x + abxy_sp, abxy_y],
+            [abxy_x - abxy_sp, abxy_y],
+            [abxy_x, abxy_y + abxy_sp]
         ];
         for (b = abxy_pts) {
             translate([b[0], b[1], -1])
@@ -132,9 +131,9 @@ module top_shell() {
 
         // 5. Center Select, Home & Start Buttons
         menu_pts = [
-            [body_l / 2 - 10, body_w / 2 + 6], // Select / Share
-            [body_l / 2 + 10, body_w / 2 + 6], // Start / Options
-            [body_l / 2, body_w / 2 - 6]       // Home
+            [body_l / 2 - 10, body_w / 2 + 6],
+            [body_l / 2 + 10, body_w / 2 + 6],
+            [body_l / 2, body_w / 2 - 6]
         ];
         for (m = menu_pts) {
             translate([m[0], m[1], -1])
