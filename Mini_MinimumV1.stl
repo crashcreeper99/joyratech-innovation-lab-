@@ -1,0 +1,108 @@
+import os
+import struct
+import numpy as np
+
+os.makedirs('generated', exist_ok=True)
+
+# Grid-based clean 2.5mm voxel/column extrusion at 0.5mm resolution for exact ergonomic hull + cutouts + upright shoulder tabs!
+# Grid size: X from -72.5 to +72.5 (145mm -> 290 cells at 0.5mm), Y from -45.0 to +45.0 (90mm -> 180 cells at 0.5mm)
+res = 0.5
+nx, ny = 290, 180
+xs = np.linspace(-72.5 + res/2, 72.5 - res/2, nx)
+ys = np.linspace(-45.0 + res/2, 45.0 - res/2, ny)
+X, Y = np.meshgrid(xs, ys, indexing='ij')
+
+# Base ergonomic silhouette: union of rounded top deck + left grip + right grip - bottom center arch cutout
+top_deck = (np.abs(X) <= 68.0) & (Y >= -8.0) & (Y <= 40.0)
+# Round corners of top deck
+tl = ((X + 46.0)**2 + (Y - 18.0)**2) <= 22.0**2
+tr = ((X - 46.0)**2 + (Y - 18.0)**2) <= 22.0**2
+top_mid = (np.abs(X) <= 46.0) & (Y >= -4.0) & (Y <= 40.0)
+side_l = (X >= -68.0) & (X <= -46.0) & (Y >= -18.0) & (Y <= 18.0)
+side_r = (X >= 46.0) & (X <= 68.0) & (Y >= -18.0) & (Y <= 18.0)
+grip_l = ((X + 50.0)**2 + (Y + 18.0)**2) <= 18.0**2
+grip_r = ((X - 50.0)**2 + (Y + 18.0)**2) <= 18.0**2
+# Angled bridge connecting center to grips
+bridge_l = (X >= -55.0) & (X <= -20.0) & (Y >= -18.0) & (Y <= 5.0)
+bridge_r = (X >= 20.0) & (X <= 55.0) & (Y >= -18.0) & (Y <= 5.0)
+
+base = top_deck | tl | tr | top_mid | side_l | side_r | grip_l | grip_r | bridge_l | bridge_r
+
+# Bottom arch cutout between grips
+arch = (X**2 + (Y + 34.0)**2) <= 26.0**2
+base = base & (~arch)
+
+# Cutouts for NodeMCU-32S zip-tie slots (center: x = +/-28, y = +/-10)
+for sx in [-28.0, 28.0]:
+    for sy in [-10.0, 10.0]:
+        slot = (np.abs(X - sx) <= 1.5) & (np.abs(Y - sy) <= 3.0)
+        base = base & (~slot)
+
+# Cutouts for Left D-Pad & Right ABXY perfboard zip-tie slots
+for side in [-46.0, 46.0]:
+    for dx in [-15.0, 15.0]:
+        slot = (np.abs(X - (side + dx)) <= 1.5) & (np.abs(Y - 18.0) <= 3.0)
+        base = base & (~slot)
+
+# Mounting holes (r=1.6mm) for Left & Right Thumbstick PCBs
+for side in [-36.0, 36.0]:
+    for dx in [-10.0, 10.0]:
+        for dy in [-10.0, 10.0]:
+            hole = ((X - (side + dx))**2 + (Y - (-10.0 + dy))**2) <= 1.6**2
+            base = base & (~hole)
+
+# Height map H(x, y): 2.5mm base plate, 12.0mm on upright L1/L2 and R1/R2 shoulder tabs
+H = np.zeros((nx, ny), dtype=np.float32)
+H[base] = 2.5
+
+# Shoulder tabs at top left (-54 to -30, y: 37.5 to 40.0) and top right (30 to 54, y: 37.5 to 40.0)
+tab_l = (X >= -54.0) & (X <= -30.0) & (Y >= 37.5) & (Y <= 40.0)
+tab_r = (X >= 30.0) & (X <= 54.0) & (Y >= 37.5) & (Y <= 40.0)
+H[tab_l | tab_r] = 12.0
+
+# Build watertight triangle mesh from heightfield H
+triangles = []
+
+def add_quad(p0, p1, p2, p3, normal):
+    triangles.append((normal, p0, p1, p2))
+    triangles.append((normal, p0, p2, p3))
+
+for i in range(nx):
+    x0 = -72.5 + i * res
+    x1 = x0 + res
+    for j in range(ny):
+        h = H[i, j]
+        if h <= 0.0:
+            continue
+        y0 = -45.0 + j * res
+        y1 = y0 + res
+        # Top face (z = h)
+        add_quad((x0, y0, h), (x1, y0, h), (x1, y1, h), (x0, y1, h), (0.0, 0.0, 1.0))
+        # Bottom face (z = 0)
+        add_quad((x0, y0, 0.0), (x0, y1, 0.0), (x1, y1, 0.0), (x1, y0, 0.0), (0.0, 0.0, -1.0))
+        # -X wall
+        h_xm = H[i-1, j] if i > 0 else 0.0
+        if h > h_xm:
+            add_quad((x0, y0, h_xm), (x0, y0, h), (x0, y1, h), (x0, y1, h_xm), (-1.0, 0.0, 0.0))
+        # +X wall
+        h_xp = H[i+1, j] if i < nx - 1 else 0.0
+        if h > h_xp:
+            add_quad((x1, y0, h_xp), (x1, y1, h_xp), (x1, y1, h), (x1, y0, h), (1.0, 0.0, 0.0))
+        # -Y wall
+        h_ym = H[i, j-1] if j > 0 else 0.0
+        if h > h_ym:
+            add_quad((x0, y0, h_ym), (x1, y0, h_ym), (x1, y0, h), (x0, y0, h), (0.0, -1.0, 0.0))
+        # +Y wall
+        h_yp = H[i, j+1] if j < ny - 1 else 0.0
+        if h > h_yp:
+            add_quad((x0, y1, h_yp), (x0, y1, h), (x1, y1, h), (x1, y1, h_yp), (0.0, 1.0, 0.0))
+
+out_path = 'generated/joyratech_mini_pro_mounting_plate.stl'
+with open(out_path, 'wb') as f:
+    header = b'Joyratech Mini Pro Mounting Plate 145x90mm' + b'\0' * (80 - 42)
+    f.write(header)
+    f.write(struct.pack('<I', len(triangles)))
+    for n, v1, v2, v3 in triangles:
+        f.write(struct.pack('<3f3f3f3fH', n[0], n[1], n[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2], v3[0], v3[1], v3[2], 0))
+
+print(f"Wrote {len(triangles)} triangles, size={os.path.getsize(out_path)} bytes")
