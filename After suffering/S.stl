@@ -1,0 +1,265 @@
+import numpy as np
+import struct
+
+def write_binary_stl(filename, triangles, header_text="Joyratech Mini PS4 Youth Controller"):
+    header = header_text.encode('ascii', 'ignore')[:80].ljust(80, b'\x00')
+    num_tris = len(triangles)
+    with open(filename, 'wb') as f:
+        f.write(header)
+        f.write(struct.pack('<I', num_tris))
+        for tri in triangles:
+            v0, v1, v2 = tri[0], tri[1], tri[2]
+            n = np.cross(v1 - v0, v2 - v0)
+            norm = np.linalg.norm(n)
+            if norm > 1e-12:
+                n = n / norm
+            else:
+                n = np.array([0.0, 0.0, 1.0])
+            f.write(struct.pack('<3f', *n))
+            f.write(struct.pack('<3f', *v0))
+            f.write(struct.pack('<3f', *v1))
+            f.write(struct.pack('<3f', *v2))
+            f.write(struct.pack('<H', 0))
+
+def create_cylinder_tris(cx, cy, z0, z1, r_bot, r_top, segs=36, invert=False):
+    tris = []
+    angles = np.linspace(0, 2*np.pi, segs, endpoint=False)
+    for i in range(segs):
+        a0 = angles[i]
+        a1 = angles[(i+1)%segs]
+        p00 = np.array([cx + r_bot*np.cos(a0), cy + r_bot*np.sin(a0), z0])
+        p10 = np.array([cx + r_bot*np.cos(a1), cy + r_bot*np.sin(a1), z0])
+        p01 = np.array([cx + r_top*np.cos(a0), cy + r_top*np.sin(a0), z1])
+        p11 = np.array([cx + r_top*np.cos(a1), cy + r_top*np.sin(a1), z1])
+        if not invert:
+            tris.append((p00, p10, p11))
+            tris.append((p00, p11, p01))
+        else:
+            tris.append((p00, p11, p10))
+            tris.append((p00, p01, p11))
+    return tris
+
+def create_disk_tris(cx, cy, z, r_in, r_out, segs=36, normal_up=True):
+    tris = []
+    angles = np.linspace(0, 2*np.pi, segs, endpoint=False)
+    for i in range(segs):
+        a0 = angles[i]
+        a1 = angles[(i+1)%segs]
+        if r_in <= 1e-6:
+            c = np.array([cx, cy, z])
+            p0 = np.array([cx + r_out*np.cos(a0), cy + r_out*np.sin(a0), z])
+            p1 = np.array([cx + r_out*np.cos(a1), cy + r_out*np.sin(a1), z])
+            if normal_up:
+                tris.append((c, p0, p1))
+            else:
+                tris.append((c, p1, p0))
+        else:
+            pi0 = np.array([cx + r_in*np.cos(a0), cy + r_in*np.sin(a0), z])
+            pi1 = np.array([cx + r_in*np.cos(a1), cy + r_in*np.sin(a1), z])
+            po0 = np.array([cx + r_out*np.cos(a0), cy + r_out*np.sin(a0), z])
+            po1 = np.array([cx + r_out*np.cos(a1), cy + r_out*np.sin(a1), z])
+            if normal_up:
+                tris.append((pi0, po0, po1))
+                tris.append((pi0, po1, pi1))
+            else:
+                tris.append((pi0, po1, po0))
+                tris.append((pi0, pi1, po1))
+    return tris
+
+def create_rect_box_with_socket(cx, cy, w_flange, d_flange, h_flange, w_top, d_top, h_total, r_socket=1.625, h_socket=2.6, taper_top=0.0):
+    tris = []
+    segs = 32
+    tris += create_cylinder_tris(cx, cy, 0.0, h_socket, r_socket, r_socket, segs=segs, invert=True)
+    tris += create_disk_tris(cx, cy, h_socket, 0.0, r_socket, segs=segs, normal_up=False)
+    
+    angles = np.linspace(0, 2*np.pi, segs, endpoint=False)
+    for i in range(segs):
+        a0 = angles[i]
+        a1 = angles[(i+1)%segs]
+        si0 = np.array([cx + r_socket*np.cos(a0), cy + r_socket*np.sin(a0), 0.0])
+        si1 = np.array([cx + r_socket*np.cos(a1), cy + r_socket*np.sin(a1), 0.0])
+        rx0 = (w_flange/2.0) * np.sign(np.cos(a0)) * (abs(np.cos(a0))**0.2)
+        ry0 = (d_flange/2.0) * np.sign(np.sin(a0)) * (abs(np.sin(a0))**0.2)
+        rx1 = (w_flange/2.0) * np.sign(np.cos(a1)) * (abs(np.cos(a1))**0.2)
+        ry1 = (d_flange/2.0) * np.sign(np.sin(a1)) * (abs(np.sin(a1))**0.2)
+        so0 = np.array([cx + rx0, cy + ry0, 0.0])
+        so1 = np.array([cx + rx1, cy + ry1, 0.0])
+        tris.append((si0, so1, so0))
+        tris.append((si0, si1, so1))
+
+    hw_f, hd_f = w_flange/2.0, d_flange/2.0
+    hw_t, hd_t = w_top/2.0, d_top/2.0
+    
+    f_b = [np.array([cx-hw_f, cy-hd_f, 0.0]), np.array([cx+hw_f, cy-hd_f, 0.0]),
+           np.array([cx+hw_f, cy+hd_f, 0.0]), np.array([cx-hw_f, cy+hd_f, 0.0])]
+    f_t = [np.array([cx-hw_f, cy-hd_f, h_flange]), np.array([cx+hw_f, cy-hd_f, h_flange]),
+           np.array([cx+hw_f, cy+hd_f, h_flange]), np.array([cx-hw_f, cy+hd_f, h_flange])]
+    p_b = [np.array([cx-hw_t, cy-hd_t, h_flange]), np.array([cx+hw_t, cy-hd_t, h_flange]),
+           np.array([cx+hw_t, cy+hd_t, h_flange]), np.array([cx-hw_t, cy+hd_t, h_flange])]
+    p_t = [np.array([cx-hw_t, cy-hd_t, h_total]), np.array([cx+hw_t, cy-hd_t, h_total]),
+           np.array([cx+hw_t, cy+hd_t, h_total-taper_top]), np.array([cx-hw_t, cy+hd_t, h_total-taper_top])]
+    
+    for k in range(4):
+        kn = (k+1)%4
+        tris.append((f_b[k], f_b[kn], f_t[kn]))
+        tris.append((f_b[k], f_t[kn], f_t[k]))
+        tris.append((f_t[k], f_t[kn], p_b[kn]))
+        tris.append((f_t[k], p_b[kn], p_b[k]))
+        tris.append((p_b[k], p_b[kn], p_t[kn]))
+        tris.append((p_b[k], p_t[kn], p_t[k]))
+    tris.append((p_t[0], p_t[1], p_t[2]))
+    tris.append((p_t[0], p_t[2], p_t[3]))
+    return tris
+
+def create_round_cap_with_socket(cx, cy, r_flange, h_flange, r_cap, h_total, r_socket=1.625, h_socket=2.6):
+    tris = []
+    segs = 40
+    tris += create_cylinder_tris(cx, cy, 0.0, h_socket, r_socket, r_socket, segs=segs, invert=True)
+    tris += create_disk_tris(cx, cy, h_socket, 0.0, r_socket, segs=segs, normal_up=False)
+    tris += create_disk_tris(cx, cy, 0.0, r_socket, r_flange, segs=segs, normal_up=False)
+    tris += create_cylinder_tris(cx, cy, 0.0, h_flange, r_flange, r_flange, segs=segs, invert=False)
+    tris += create_disk_tris(cx, cy, h_flange, r_cap, r_flange, segs=segs, normal_up=True)
+    tris += create_cylinder_tris(cx, cy, h_flange, h_total - 0.5, r_cap, r_cap, segs=segs, invert=False)
+    tris += create_cylinder_tris(cx, cy, h_total - 0.5, h_total, r_cap, r_cap - 0.45, segs=segs, invert=False)
+    tris += create_disk_tris(cx, cy, h_total, 0.0, r_cap - 0.45, segs=segs, normal_up=True)
+    return tris
+
+btn_tris = []
+for i in range(4):
+    btn_tris += create_round_cap_with_socket(10 + i*16, 10, 4.4, 1.2, 3.35, 4.8)
+for i in range(4):
+    btn_tris += create_round_cap_with_socket(10 + i*16, 26, 4.55, 1.2, 3.5, 4.8)
+for i in range(3):
+    btn_tris += create_round_cap_with_socket(10 + i*16, 42, 3.9, 1.2, 2.85, 4.5)
+btn_tris += create_round_cap_with_socket(10 + 3*16, 42, 4.2, 1.2, 3.15, 4.5)
+btn_tris += create_rect_box_with_socket(12, 58, 9.0, 7.2, 1.2, 7.0, 5.2, 5.4, taper_top=0.4)
+btn_tris += create_rect_box_with_socket(28, 58, 9.0, 7.2, 1.2, 7.0, 5.2, 5.4, taper_top=0.4)
+btn_tris += create_rect_box_with_socket(44, 58, 9.0, 8.2, 1.2, 7.0, 6.2, 7.2, taper_top=1.6)
+btn_tris += create_rect_box_with_socket(60, 58, 9.0, 8.2, 1.2, 7.0, 6.2, 7.2, taper_top=1.6)
+btn_tris += create_rect_box_with_socket(24, 76, 32.0, 15.6, 1.2, 30.0, 13.6, 4.6, taper_top=0.2)
+btn_tris += create_rect_box_with_socket(62, 76, 32.0, 15.6, 1.2, 30.0, 13.6, 4.6, taper_top=0.2)
+
+write_binary_stl("joyratech_ps4_complete_buttons.stl", btn_tris, "Joyratech PS4 Complete 18 Button Caps")
+
+def ps4_outline_r(theta, cx=69.0, cy=50.0):
+    x = np.cos(theta)
+    y = np.sin(theta)
+    r = 34.0
+    r += 28.0 * np.exp(-((theta - 0.0)**2)/0.35)
+    r += 28.0 * np.exp(-((theta - np.pi)**2)/0.35)
+    r += 28.0 * np.exp(-((theta - 2*np.pi)**2)/0.35)
+    r += 24.0 * np.exp(-((theta - (-1.18))**2)/0.09)
+    r += 24.0 * np.exp(-((theta - (-1.96))**2)/0.09)
+    r -= 14.0 * np.exp(-((theta - (-1.57))**2)/0.07)
+    r -= 6.0 * np.exp(-((theta - 1.57)**2)/0.25)
+    return r
+
+fp_tris = []
+cx0, cy0 = 69.0, 52.0
+wall = 2.4
+h_fp = 10.0
+segs_out = 180
+thetas = np.linspace(-np.pi, np.pi, segs_out, endpoint=False)
+
+out_pts = []
+in_pts = []
+for th in thetas:
+    r = ps4_outline_r(th)
+    px = cx0 + r * np.cos(th)
+    py = cy0 + r * 0.72 * np.sin(th)
+    out_pts.append((px, py))
+    ri = r - wall
+    in_pts.append((cx0 + ri * np.cos(th), cy0 + ri * 0.72 * np.sin(th)))
+
+holes = [
+    (cx0 - 22.0, cy0 - 8.0, 12.0),
+    (cx0 + 22.0, cy0 - 8.0, 12.0),
+    (cx0 - 38.0, cy0 + 10.0, 3.65),
+    (cx0 - 22.0, cy0 + 10.0, 3.65),
+    (cx0 - 30.0, cy0 + 18.0, 3.65),
+    (cx0 - 30.0, cy0 + 2.0, 3.65),
+    (cx0 + 22.0, cy0 + 10.0, 3.80),
+    (cx0 + 38.0, cy0 + 10.0, 3.80),
+    (cx0 + 30.0, cy0 + 18.0, 3.80),
+    (cx0 + 30.0, cy0 + 2.0, 3.80),
+    (cx0 - 21.0, cy0 + 21.0, 3.15),
+    (cx0 + 21.0, cy0 + 21.0, 3.15),
+    (cx0,        cy0 + 1.5,  3.45),
+    (cx0 - 52.0, cy0 + 20.0, 1.70),
+    (cx0 + 52.0, cy0 + 20.0, 1.70),
+    (cx0 - 50.0, cy0 - 4.0,  1.70),
+    (cx0 + 50.0, cy0 - 4.0,  1.70),
+    (cx0 - 33.0, cy0 - 31.0, 1.70),
+    (cx0 + 33.0, cy0 - 31.0, 1.70),
+]
+
+tp_cx, tp_cy, tp_hw, tp_hd = cx0, cy0 + 16.0, 15.5, 7.25
+
+for i in range(segs_out):
+    inext = (i+1)%segs_out
+    ox0, oy0 = out_pts[i]
+    ox1, oy1 = out_pts[inext]
+    ix0, iy0 = in_pts[i]
+    ix1, iy1 = in_pts[inext]
+    fp_tris.append((np.array([ox0, oy0, 0.0]), np.array([ox1, oy1, 0.0]), np.array([ox1, oy1, h_fp])))
+    fp_tris.append((np.array([ox0, oy0, 0.0]), np.array([ox1, oy1, h_fp]), np.array([ox0, oy0, h_fp])))
+    fp_tris.append((np.array([ix0, iy0, wall]), np.array([ix1, iy1, h_fp]), np.array([ix1, iy1, wall])))
+    fp_tris.append((np.array([ix0, iy0, wall]), np.array([ix0, iy0, h_fp]), np.array([ix1, iy1, h_fp])))
+    fp_tris.append((np.array([ix0, iy0, h_fp]), np.array([ox1, oy1, h_fp]), np.array([ox0, oy0, h_fp])))
+    fp_tris.append((np.array([ix0, iy0, h_fp]), np.array([ix1, iy1, h_fp]), np.array([ox1, oy1, h_fp])))
+
+for hx, hy, hr in holes:
+    fp_tris += create_cylinder_tris(hx, hy, 0.0, wall, hr, hr, segs=32, invert=True)
+
+tp_pts = [(tp_cx-tp_hw, tp_cy-tp_hd), (tp_cx+tp_hw, tp_cy-tp_hd),
+          (tp_cx+tp_hw, tp_cy+tp_hd), (tp_cx-tp_hw, tp_cy+tp_hd)]
+for k in range(4):
+    kn = (k+1)%4
+    x0, y0 = tp_pts[k]
+    x1, y1 = tp_pts[kn]
+    fp_tris.append((np.array([x0, y0, 0.0]), np.array([x1, y1, wall]), np.array([x1, y1, 0.0])))
+    fp_tris.append((np.array([x0, y0, 0.0]), np.array([x0, y0, wall]), np.array([x1, y1, wall])))
+
+gx, gy = 1.5, 1.5
+xs = np.arange(8.0, 131.0, gx)
+ys = np.arange(8.0, 92.0, gy)
+
+def point_in_poly(x, y, poly):
+    inside = False
+    n = len(poly)
+    p1x, p1y = poly[0]
+    for i in range(1, n + 1):
+        p2x, p2y = poly[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xinters = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xinters:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+def is_solid(x, y):
+    if not point_in_poly(x, y, in_pts):
+        return False
+    if (tp_cx - tp_hw) <= x <= (tp_cx + tp_hw) and (tp_cy - tp_hd) <= y <= (tp_cy + tp_hd):
+        return False
+    for hx, hy, hr in holes:
+        if (x - hx)**2 + (y - hy)**2 <= hr**2:
+            return False
+    return True
+
+for ix in range(len(xs)-1):
+    for iy in range(len(ys)-1):
+        x0, x1 = xs[ix], xs[ix+1]
+        y0, y1 = ys[iy], ys[iy+1]
+        xm, ym = 0.5*(x0+x1), 0.5*(y0+y1)
+        if is_solid(xm, ym):
+            fp_tris.append((np.array([x0, y0, 0.0]), np.array([x1, y1, 0.0]), np.array([x1, y0, 0.0])))
+            fp_tris.append((np.array([x0, y0, 0.0]), np.array([x0, y1, 0.0]), np.array([x1, y1, 0.0])))
+            fp_tris.append((np.array([x0, y0, wall]), np.array([x1, y0, wall]), np.array([x1, y1, wall])))
+            fp_tris.append((np.array([x0, y0, wall]), np.array([x1, y1, wall]), np.array([x0, y1, wall])))
+
+write_binary_stl("joyratech_ps4_perfect_faceplate.stl", fp_tris, "Joyratech PS4 Youth Top Faceplate")
+print("Generated:", len(btn_tris), len(fp_tris))
